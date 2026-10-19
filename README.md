@@ -14,22 +14,27 @@ Each task folder has its own README with install and run instructions, an archit
 
 ## Quick start
 
-You need Python 3.11 or newer, and PostgreSQL. To get PostgreSQL from Docker, with the `sensors` and `workshops` databases and their test databases created:
+You need Python 3.11 or newer, and a local PostgreSQL 13 or newer (for example, installed with Homebrew or the EDB installer, and managed in pgAdmin 4). No Docker is needed.
 
-```bash
-docker compose up -d
-```
+1. Create two databases, `sensors` and `workshops`, in pgAdmin (right-click **Databases**, then **Create**, then **Database**) or from a terminal:
 
-Then, for each task:
+   ```bash
+   createdb sensors
+   createdb workshops
+   ```
 
-```bash
-cd "task 1"            # or "task 2"
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # points at the docker-compose database by default
-```
+   To run the test suites, also create `sensors_test` and `workshops_test`. The tests empty their tables, so they must never point at the real databases.
 
-Then follow that task's README.
+2. Set up each task:
+
+   ```bash
+   cd "task 1"            # or "task 2"
+   python3 -m venv .venv && source .venv/bin/activate
+   pip install -r requirements.txt
+   cp .env.example .env   # then put your PostgreSQL username and password into DATABASE_URL
+   ```
+
+3. Follow that task's README to start the services. Tables are created automatically on first start.
 
 ## Ports
 

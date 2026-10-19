@@ -16,7 +16,7 @@ A workshop registration service (Flask and PostgreSQL), an outbox worker that de
 ## Prerequisites
 
 - Python 3.11 or newer (tested on 3.14)
-- PostgreSQL 13 or newer (tested on 14). The repository's `docker-compose.yml` starts one.
+- A local PostgreSQL 13 or newer (tested on 14) with an empty `workshops` database, created in pgAdmin 4 or with `createdb workshops`
 
 ## Install and run
 

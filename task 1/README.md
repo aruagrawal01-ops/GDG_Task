@@ -9,7 +9,7 @@ A Flask and PostgreSQL backend. It ingests campus sensor readings (single readin
 ## Prerequisites
 
 - Python 3.11 or newer (tested on 3.14)
-- PostgreSQL 13 or newer (tested on 14). The repository's `docker-compose.yml` starts one with both databases.
+- A local PostgreSQL 13 or newer (tested on 14) with an empty `sensors` database, created in pgAdmin 4 or with `createdb sensors`
 
 ## Install and run
 
