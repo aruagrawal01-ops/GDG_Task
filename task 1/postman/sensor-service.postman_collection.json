@@ -1,0 +1,393 @@
+{
+  "info": {
+    "name": "Task 1 - Campus Sensor Monitoring",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "ruleId",
+      "value": "1"
+    },
+    {
+      "key": "alertId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stats"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Rules",
+      "item": [
+        {
+          "name": "Create single rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Too hot\",\n  \"sensorType\": \"temperature\",\n  \"kind\": \"single\",\n  \"operator\": \">\",\n  \"threshold\": 30\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('ruleId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create window rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hot for 10 minutes\",\n  \"sensorType\": \"temperature\",\n  \"kind\": \"window\",\n  \"operator\": \">\",\n  \"threshold\": 28,\n  \"windowSeconds\": 600,\n  \"aggregation\": \"avg\",\n  \"minSamples\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "List rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get rule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rules/{{ruleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules",
+                "{{ruleId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edit rule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rules/{{ruleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules",
+                "{{ruleId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 32\n}"
+            }
+          }
+        },
+        {
+          "name": "Disable rule",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rules/{{ruleId}}/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules",
+                "{{ruleId}}",
+                "disable"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Enable rule",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/rules/{{ruleId}}/enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rules",
+                "{{ruleId}}",
+                "enable"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Readings",
+      "item": [
+        {
+          "name": "Post single reading",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/readings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "readings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sensorId\": \"library-floor-2\",\n  \"type\": \"temperature\",\n  \"value\": 34.5,\n  \"timestamp\": \"2026-10-12T10:30:00Z\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Post batch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/readings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "readings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"sensorId\": \"library-floor-2\",\n    \"type\": \"temperature\",\n    \"value\": 34.5,\n    \"timestamp\": \"2026-10-12T10:30:00Z\"\n  },\n  {\n    \"sensorId\": \"lab-temperature-1\",\n    \"type\": \"temperature\",\n    \"value\": 22.1,\n    \"timestamp\": \"2026-10-12T10:30:00Z\"\n  },\n  {\n    \"sensorId\": \"x\",\n    \"type\": \"temperature\",\n    \"value\": \"bad\",\n    \"timestamp\": \"2026-10-12T10:30:00Z\"\n  }\n]"
+            }
+          }
+        },
+        {
+          "name": "List readings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/readings?sensorId=library-floor-2&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "readings"
+              ],
+              "query": [
+                {
+                  "key": "sensorId",
+                  "value": "library-floor-2"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "List open alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts?status=open",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const items = pm.response.json().items;",
+                  "if (items.length) { pm.collectionVariables.set('alertId', items[0].id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get alert",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alertId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alertId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Acknowledge alert",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alertId}}/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alertId}}",
+                "acknowledge"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Resolve alert",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alertId}}/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alertId}}",
+                "resolve"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
