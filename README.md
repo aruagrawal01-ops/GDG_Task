@@ -1,46 +1,24 @@
-# GDG Backend Development Tasks
+# GDG Backend Tasks
 
 Two backend services built with Python, Flask and PostgreSQL.
 
-| Folder | Task | Highlights |
-|---|---|---|
-| [`task 1`](task%201/) | Campus Sensor Monitoring and Alerts | Batched ingestion through a bounded queue with `429` backpressure; single-reading and sliding time-window rules; de-duplicated alerts with an open, acknowledged and resolved lifecycle; a sensor simulator; a measured load test of 10,000 readings in one second |
-| [`task 2`](task%202/) | Workshop Registration and Notifications | Transactional outbox; a separate outbox worker with `SKIP LOCKED` claims, leases, backoff with jitter and dead letters; an idempotent mock notifier that fails and times out; an automated demo including a `kill -9` restart |
-
-Each task folder has its own README with install and run instructions, an architecture document, a Postman collection, and a test suite.
-
-- Task 1: [README](task%201/README.md), [architecture](task%201/docs/architecture.md), [load-test report](task%201/docs/load-test-report.md)
-- Task 2: [README](task%202/README.md), [architecture: lost notifications, retries, duplicates and restarts](task%202/docs/architecture.md)
-
-## Quick start
-
-You need Python 3.11 or newer, and a local PostgreSQL 13 or newer (for example, installed with Homebrew or the EDB installer, and managed in pgAdmin 4). No Docker is needed.
-
-1. Create two databases, `sensors` and `workshops`, in pgAdmin (right-click **Databases**, then **Create**, then **Database**) or from a terminal:
-
-   ```bash
-   createdb sensors
-   createdb workshops
-   ```
-
-   To run the test suites, also create `sensors_test` and `workshops_test`. The tests empty their tables, so they must never point at the real databases.
-
-2. Set up each task:
-
-   ```bash
-   cd "task 1"            # or "task 2"
-   python3 -m venv .venv && source .venv/bin/activate
-   pip install -r requirements.txt
-   cp .env.example .env   # then put your PostgreSQL username and password into DATABASE_URL
-   ```
-
-3. Follow that task's README to start the services. Tables are created automatically on first start.
-
-## Ports
-
-| Service | Port |
+| Folder | Task |
 |---|---|
-| Task 1 sensor API | 8000 |
-| Task 2 registration API | 8001 |
-| Task 2 mock notifier | 8002 |
-| PostgreSQL | 5432 |
+| [`task 1`](task%201/) | Campus Sensor Monitoring and Alerts |
+| [`task 2`](task%202/) | Workshop Registration and Notifications |
+
+Each folder has its own README with install and run instructions, how the design works, and the trade-offs.
+
+## Setup
+
+You need Python 3.11+ and PostgreSQL. Create two empty databases, `sensors` and `workshops`, in pgAdmin or from a terminal:
+
+```bash
+createdb sensors
+```
+
+```bash
+createdb workshops
+```
+
+Then follow the README in each task folder.

@@ -1,135 +1,179 @@
 # Task 2: Workshop Registration and Notifications
 
-A workshop registration service (Flask and PostgreSQL), an outbox worker that delivers notifications with retries, and a mock HTTP notification service that sometimes fails or times out. Registration returns immediately. Confirmations and cancellation notices are delivered eventually, survive backend restarts, and are de-duplicated by idempotency keys.
+A Flask and PostgreSQL workshop registration service, a background worker that sends notifications, and a mock notification service that sometimes fails.
 
-- Design, and how it handles lost notifications, retries, duplicate delivery and restarts: [docs/architecture.md](docs/architecture.md)
-- Postman collection: [postman/workshop-service.postman_collection.json](postman/workshop-service.postman_collection.json)
+## Files
 
-## Components
-
-| Process | Command | Port |
-|---|---|---|
-| Registration API | `gunicorn -c gunicorn.conf.py wsgi:app` | 8001 |
-| Outbox worker | `python -m outbox_worker` | none |
-| Mock notifier | `python -m mock_notifier` | 8002 |
-
-## Prerequisites
-
-- Python 3.11 or newer (tested on 3.14)
-- A local PostgreSQL 13 or newer (tested on 14) with an empty `workshops` database, created in pgAdmin 4 or with `createdb workshops`
+| File | What it does |
+|---|---|
+| `app.py` | The web API: create workshops, register members, cancel workshops |
+| `worker.py` | Sends pending notifications to the notification service and retries failures |
+| `notifier.py` | Mock notification service: sometimes returns an error or replies too slowly |
+| `db.py` | Opens database connections; `python db.py` creates the tables |
+| `schema.sql` | The three tables: `workshops`, `registrations`, `notifications` |
 
 ## Install and run
+
+You need Python 3.11+ and PostgreSQL with an empty database called `workshops`.
 
 ```bash
 cd "task 2"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env            # set DATABASE_URL to your PostgreSQL database
+cp .env.example .env
 ```
 
-Start each process in its own terminal from the `task 2` folder:
+Put your PostgreSQL username and password into `DATABASE_URL` in `.env`, then create the tables once:
 
 ```bash
-python -m mock_notifier
+python db.py
+```
+
+Start each program in its own terminal:
+
+```bash
+python notifier.py
 ```
 
 ```bash
-gunicorn -c gunicorn.conf.py wsgi:app
+python app.py
 ```
 
 ```bash
-python -m outbox_worker
+python worker.py
 ```
 
-The API and the worker create the tables on startup. Check them with `curl localhost:8001/health` and `curl localhost:8001/stats`.
+| Program | Address |
+|---|---|
+| API | http://localhost:8001 |
+| Mock notifier | http://localhost:8002 |
 
-### Configuration (`.env`)
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `DATABASE_URL` | `postgresql://postgres@localhost:5432/workshops` | PostgreSQL connection string |
-| `NOTIFIER_URL` | `http://localhost:8002/notify` | Where the worker sends notifications |
-| `WORKER_CONCURRENCY` | `8` | Notifications sent in parallel |
-| `LEASE_SECONDS` | `30` | How long a claimed row stays locked if the worker dies |
-| `MAX_ATTEMPTS` | `50` | Attempts before a row becomes `dead` (it can be replayed) |
-| `BACKOFF_BASE_SECONDS`, `BACKOFF_CAP_SECONDS` | `2`, `300` | Exponential backoff with jitter |
-| `NOTIFY_CONNECT_TIMEOUT`, `NOTIFY_READ_TIMEOUT` | `1`, `2` | Per-call timeouts in seconds |
-| `NOTIFIER_FAILURE_RATE` | `0.2` | Share of calls that return `500` |
-| `NOTIFIER_TIMEOUT_RATE` | `0.15` | Share of calls that are delivered but answered only after `NOTIFIER_TIMEOUT_SECONDS` (5) |
-| `NOTIFIER_DB` | `notifier.sqlite3` | Where the notifier remembers delivered idempotency keys |
-
-## Demonstration
-
-The demo script starts all three processes itself (stop any running copies first). It walks through every required scenario and prints the outbox and the notifier's view at each step:
-
-```bash
-python simulator/demo.py
-```
-
-1. Start the notifier, the API and the worker, and show `/health`.
-2. Register three members. Each `201` comes back in a few milliseconds, and the confirmations move to `sent`.
-3. Register a member twice. The second attempt gets `409`, and no new outbox row appears.
-4. Lost acknowledgement: the notifier delivers but replies after the worker's timeout. The worker retries, the notifier logs `DUPLICATE-IGNORED`, and the member is notified once.
-5. Notification failure: the notifier is stopped. New confirmations stay `pending` while `attempts` grows with backoff.
-6. Recovery: the notifier is started again, and the pending rows drain.
-7. Backend restart: a member registers, then the API and the worker are killed with `kill -9`. The outbox row is still in PostgreSQL. After restart, the confirmation is delivered.
-8. Cancellation with 50% notifier errors: one cancellation row per member. All are eventually `sent`. A second cancel queues nothing.
-9. The notifier's record: every member got exactly one confirmation and one cancellation, in that order.
-
-Process logs go to `demo-logs/`. Reading `worker.log` and `notifier.log` side by side shows the retries and de-duplication.
-
-### Doing it by hand (curl or Postman)
-
-```bash
-curl -X POST localhost:8001/members -H 'content-type: application/json' -d '{"name":"Asha","email":"asha@campus.edu"}'
-curl -X POST localhost:8001/workshops -H 'content-type: application/json' -d '{"title":"Backend Basics","startsAt":"2026-11-20T10:00:00Z","capacity":30}'
-curl -X POST localhost:8001/workshops/1/register -H 'content-type: application/json' -d '{"memberId":1}'
-curl "localhost:8001/outbox?workshopId=1"
-curl -X POST localhost:8002/admin/config -H 'content-type: application/json' -d '{"down":true}'   # notifier unavailable
-curl -X POST localhost:8002/admin/config -H 'content-type: application/json' -d '{"down":false,"failureRate":0.5}'
-curl -X POST localhost:8001/workshops/1/cancel
-curl "localhost:8002/deliveries?workshopId=1"
-```
+The notifier fails 20% of requests and replies too slowly to 10%. Change this with environment variables, for example `FAILURE_RATE=0.5 SLOW_RATE=0.2 python notifier.py`.
 
 ## API
 
-| Method and path | Purpose |
+| Request | What it does |
 |---|---|
-| `POST /members`, `GET /members`, `GET /members/{id}` | Create and view members. Email is unique (`409`). |
-| `POST /workshops`, `GET /workshops`, `GET /workshops/{id}` | Create and view workshops (`title`, optional `startsAt` and `capacity`) |
-| `POST /workshops/{id}/register` | Body `{"memberId": 1}`. Returns `201`, `404` (unknown workshop or member), or `409` (already registered, full, or cancelled). |
-| `GET /workshops/{id}/registrations` | Registrations with each member's confirmation and cancellation delivery status |
-| `POST /workshops/{id}/cancel` | Cancels and queues one notification per registered member. Idempotent. |
-| `GET /outbox?status=&kind=&workshopId=` | Debug view of notifications, including attempts and last error |
-| `POST /outbox/{id}/retry` | Replays a `dead` notification |
-| `GET /health`, `GET /stats` | Liveness, outbox counts per kind and status, and the age of the oldest pending row |
+| `POST /workshops` | Create a workshop: `{"title": "Intro to Backend"}` |
+| `GET /workshops/<id>` | The workshop and its registrations |
+| `POST /workshops/<id>/register` | Register a member: `{"member_id": "alice"}` |
+| `POST /workshops/<id>/cancel` | Cancel the workshop and notify every registered member |
+| `GET /notifications` | Every notification with its status, attempts and last error |
 
-Mock notifier (port 8002):
+The mock notifier has `POST /notify` (used by the worker) and `GET /deliveries` (what it has delivered).
 
-| Method and path | Purpose |
+### Errors
+
+| Status | When |
 |---|---|
-| `POST /notify` | Requires an `Idempotency-Key` header. Returns `200 delivered`, `200 duplicate`, `500` (injected), or `503` (down). It can also deliver and then reply slowly. |
-| `GET /deliveries?workshopId=&memberId=` | What was actually delivered, with a duplicate count per key |
-| `GET /stats` | Settings and counters |
-| `POST /admin/config` | Change `failureRate`, `timeoutRate`, `timeoutSeconds`, `down`, `failNext` or `timeoutNext` at runtime |
-| `POST /admin/reset` | Clear the delivery record |
+| 400 | The body is missing or a field is empty |
+| 404 | The workshop does not exist |
+| 409 | The member is already registered, the workshop is cancelled, or it is already cancelled |
+| 503 | The database cannot be reached |
 
-## Tests
+## Demonstration
 
-The tests need a separate, empty PostgreSQL database:
+With the three programs running:
+
+**1. Registration.** Each request returns 201 in about 20 ms, without waiting for the notifier:
 
 ```bash
-createdb workshops_test
-TEST_DATABASE_URL=postgresql://postgres@localhost:5432/workshops_test pytest
+curl -X POST localhost:8001/workshops -H 'content-type: application/json' -d '{"title": "Intro to Backend"}'
+curl -X POST localhost:8001/workshops/1/register -H 'content-type: application/json' -d '{"member_id": "alice"}'
+curl -X POST localhost:8001/workshops/1/register -H 'content-type: application/json' -d '{"member_id": "bob"}'
+curl localhost:8001/notifications
 ```
 
-They cover:
+Registering `alice` again returns 409, and no second notification is created.
 
-- The outbox row being written atomically with the registration, and no row for failed registrations
-- Concurrent duplicate registrations, the capacity limit under concurrency, and cancellation racing registrations
-- Cancellation ordering and idempotency
-- Delivery, backoff, per-member isolation of failures, dead letters and replay, sender exceptions
-- Lease expiry with a stale result being ignored, and restarts
-- Notifier idempotency, including across a notifier restart
-- A real HTTP lost-acknowledgement scenario
+**2. Notification failure.** Stop `notifier.py` with Ctrl+C and register another member. In `GET /notifications` the new confirmation stays `pending`, `attempts` goes up and `last_error` shows `ConnectionError`. The worker log shows:
+
+```
+FAILED  confirmation for dave (attempt 1): ConnectionError, retrying in 2s
+FAILED  confirmation for dave (attempt 2): ConnectionError, retrying in 4s
+```
+
+**3. Recovery.** Start `notifier.py` again. At its next retry the confirmation is sent:
+
+```
+SENT    confirmation for dave (attempt 4)
+```
+
+**4. Backend restart.** Stop the notifier, register a member, then kill `app.py` and `worker.py` (Ctrl+C, or `kill -9`). Start all three again. The pending confirmation is still in the database and gets delivered.
+
+**5. Cancellation.** Cancel the workshop while the notifier is flaky:
+
+```bash
+curl -X POST localhost:8001/workshops/1/cancel
+```
+
+The response says how many notifications were queued. Every registered member gets a cancellation notification. Members whose sends fail are retried while the others go through, as in this run with a 40% failure rate:
+
+```
+SENT    cancellation for alice (attempt 1)
+FAILED  cancellation for bob (attempt 1): ReadTimeout, retrying in 2s
+SENT    cancellation for carol (attempt 1)
+FAILED  cancellation for dave (attempt 1): HTTP 500, retrying in 2s
+SENT    cancellation for erin (attempt 1)
+SENT    cancellation for bob (attempt 2)
+```
+
+## How the design handles the hard cases
+
+### The registration and its notification are saved together
+
+Registering inserts the registration and a `pending` row in `notifications` in **one transaction**. Either both are saved or neither is:
+
+- A **failed registration** (duplicate, cancelled workshop, unknown workshop) is rolled back, so it never produces a confirmation.
+- A **successful registration** always has a notification row waiting. The API never calls the notifier itself, so it answers immediately.
+
+### Lost notifications
+
+A notification is never only in memory. It stays `pending` in the database until the notifier answers with a 2xx status. Nothing is lost if the notifier is down, slow, or returns an error.
+
+### Retries
+
+The worker picks the next due notification, sends it with a 2-second timeout, and records the result:
+
+- A **2xx response** marks it `sent`.
+- An **error, a timeout or no connection** adds one to `attempts`, stores the error, and schedules the next try with a growing wait of 2, 4, 8, 16, 32, then 60 seconds.
+
+Each notification has its own `attempts` and `next_attempt_at`. While one member's notification waits to be retried, the worker carries on with everyone else's, so **one failure never blocks the others**.
+
+### Duplicate delivery
+
+When a request times out, the worker cannot know whether the notifier received it. It retries, because "every registration must eventually get a confirmation". So a message may arrive more than once (at-least-once delivery).
+
+To make this harmless, each notification is sent with an `Idempotency-Key` header (`notification-<id>`) that stays the same on every retry. The notifier remembers the keys it has delivered and ignores repeats:
+
+```
+DELIVERED  notification-7: cancellation for bob
+SLOW       notification-7: replying after 5s, the worker will time out
+DUPLICATE  notification-7: already delivered, ignored
+```
+
+The database also allows only one confirmation and one cancellation per registration (`UNIQUE (registration_id, kind)`).
+
+### Backend restarts
+
+| The backend stops… | What happens |
+|---|---|
+| Before the registration is committed | Nothing was saved and the client got no 201, so no confirmation is owed |
+| After the commit, before sending | The notification is `pending` in the database; the worker sends it after the restart |
+| While the worker is sending | The worker's transaction is rolled back, so the notification is still `pending` and is sent again; a repeat is ignored by the notifier |
+
+### Registering and cancelling at the same time
+
+Registration locks the workshop row with `FOR SHARE` and cancellation with `FOR UPDATE`. A registration therefore either finishes before the cancellation (and that member gets a cancellation notice) or sees the workshop as cancelled and gets 409.
+
+### Several workers
+
+The worker picks notifications with `FOR UPDATE SKIP LOCKED`, so more than one worker can run without sending the same notification at the same time.
+
+## Trade-offs
+
+- **The worker sends one notification at a time.** A slow notifier (2-second timeout) limits throughput. Running more workers fixes this.
+- **Retries never stop.** This keeps the "eventually delivered" promise, but a permanently broken address would be retried every minute forever. A real system would stop after N attempts and alert someone.
+- **Order is not guaranteed.** If a confirmation is still being retried when the workshop is cancelled, the member may get the cancellation first.
+- **The mock notifier remembers delivered keys only while it is running.** A real notification service would store them in a database.
